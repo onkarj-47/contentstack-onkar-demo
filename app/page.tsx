@@ -186,7 +186,7 @@ export default function Home() {
       <section className="bg-gradient-to-r from-blue-50 to-indigo-50 py-16">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-            Stories that <span className="text-blue-600">inspire</span> developers
+            Insights that <span className="text-blue-600">inspire</span> developers
           </h1>
           <p className="text-xl text-gray-600 mb-12 max-w-3xl mx-auto">
             Discover cutting-edge development techniques, learn from industry experts, 
@@ -223,7 +223,7 @@ export default function Home() {
       <section id="featured" className="py-16">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex justify-between items-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900">Featured Stories</h2>
+            <h2 className="text-3xl font-bold text-gray-900">Featured Insights</h2>
             <Link href="/blog" className="text-blue-600 hover:text-blue-800 font-medium">
               View all →
             </Link>
@@ -323,7 +323,7 @@ export default function Home() {
       {/* Recent Stories */}
       <section className="py-16">
         <div className="max-w-6xl mx-auto px-4">
-          <h2 className="text-3xl font-bold text-gray-900 mb-12">Latest Stories</h2>
+                      <h2 className="text-3xl font-bold text-gray-900 mb-12">Latest Insights</h2>
           
           {recentBlogs.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -372,7 +372,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-4">Stay in the loop</h2>
           <p className="text-gray-300 mb-8 text-lg">
-            Get the latest stories and insights delivered to your inbox every week.
+            Get the latest insights and updates delivered to your inbox every week.
           </p>
           
           {subscriptionSuccess ? (
@@ -427,7 +427,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-gray-200 py-8">
         <div className="max-w-6xl mx-auto px-4 text-center text-gray-600">
-          <p>&copy; 2024 DevStories. Sharing knowledge, one story at a time.</p>
+          <p>&copy; 2024 Insight Hub. Sharing knowledge, one insight at a time.</p>
         </div>
       </footer>
     </div>

@@ -76,7 +76,7 @@ function BlogPageContent() {
         <header className="border-b border-gray-100">
           <div className="max-w-4xl mx-auto px-6 py-6">
             <Link href="/" className="text-3xl font-bold text-black">
-              Stories
+              Insight Hub
             </Link>
           </div>
         </header>
@@ -327,7 +327,7 @@ export default function BlogPage() {
         <header className="border-b border-gray-100">
           <div className="max-w-4xl mx-auto px-6 py-6">
             <Link href="/" className="text-3xl font-bold text-black">
-              Stories
+              Insight Hub
             </Link>
           </div>
         </header>
