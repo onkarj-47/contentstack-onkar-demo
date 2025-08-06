@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -9,9 +9,9 @@ import { Blog } from "@/lib/types";
 import SearchBar from "@/app/components/SearchBar";
 
 /**
- * Blog Listing Page - Medium-style design
+ * Blog Listing Page Content - Contains the search params logic
  */
-export default function BlogPage() {
+function BlogPageContent() {
   const searchParams = useSearchParams();
   const [blogs, setBlogs] = useState<Blog[]>([]);
   const [allBlogs, setAllBlogs] = useState<Blog[]>([]); // Store all blogs for resetting search
@@ -313,5 +313,49 @@ export default function BlogPage() {
         )}
       </main>
     </div>
+  );
+}
+
+/**
+ * Main Blog Page with Suspense boundary
+ */
+export default function BlogPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-white">
+        {/* Simple Header */}
+        <header className="border-b border-gray-100">
+          <div className="max-w-4xl mx-auto px-6 py-6">
+            <Link href="/" className="text-3xl font-bold text-black">
+              Stories
+            </Link>
+          </div>
+        </header>
+
+        <div className="max-w-2xl mx-auto px-6 py-16">
+          <div className="animate-pulse">
+            <div className="h-12 bg-gray-200 rounded mb-12"></div>
+            <div className="space-y-12">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="border-b border-gray-100 pb-12">
+                  <div className="flex items-center mb-4">
+                    <div className="w-8 h-8 bg-gray-200 rounded-full mr-3"></div>
+                    <div>
+                      <div className="h-4 bg-gray-200 rounded w-24 mb-1"></div>
+                      <div className="h-3 bg-gray-200 rounded w-16"></div>
+                    </div>
+                  </div>
+                  <div className="h-8 bg-gray-200 rounded mb-3"></div>
+                  <div className="h-4 bg-gray-200 rounded mb-2 w-5/6"></div>
+                  <div className="h-4 bg-gray-200 rounded w-4/6"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    }>
+      <BlogPageContent />
+    </Suspense>
   );
 }
