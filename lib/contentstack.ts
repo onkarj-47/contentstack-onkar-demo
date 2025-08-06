@@ -259,79 +259,105 @@ export async function searchBlogs(searchQuery: string) {
   }
 
   const trimmedQuery = searchQuery.trim();
+  console.log("🔍 Searching for:", trimmedQuery);
   
-  // Create multiple query conditions to search across different fields
-  const result = await stack
+  // Get all blogs and filter manually for more reliable search
+  const allBlogsResult = await stack
     .contentType("blog")
     .entry()
     .query()
-    .or(
-      // Search in title
-      stack.contentType("blog").entry().query().where("title", QueryOperation.MATCHES, trimmedQuery),
-      // Search in summary
-      stack.contentType("blog").entry().query().where("summary", QueryOperation.MATCHES, trimmedQuery),
-      // Search in content
-      stack.contentType("blog").entry().query().where("content", QueryOperation.MATCHES, trimmedQuery),
-      // Search in tags (categories_tags is an array)
-      stack.contentType("blog").entry().query().where("categories_tags", QueryOperation.INCLUDES, [trimmedQuery])
-    )
     .orderByDescending('published_date')
     .find<Blog>();
 
-  if (result.entries) {
-    const entries = result.entries;
+  if (!allBlogsResult.entries) {
+    return [];
+  }
 
-    // Fetch author data separately for each blog post and filter by author name if needed
-    const enrichedEntries = [];
+  const allBlogs = allBlogsResult.entries;
+  console.log("📊 Total blogs to search:", allBlogs.length);
+
+  // Manual search through blog content
+  const matchingBlogs = allBlogs.filter(blog => {
+    const query = trimmedQuery.toLowerCase();
     
-    for (const entry of entries) {
-      // Fetch author data
-      if (entry.author && Array.isArray(entry.author) && entry.author.length > 0) {
-        const authorUid = (entry.author[0] as any).uid || entry.author[0];
-        if (typeof authorUid === 'string') {
-          const authorData = await getAuthorByUid(authorUid);
-          if (authorData) {
-            entry.author = [authorData];
-          }
+    // Search in title
+    if (blog.title && blog.title.toLowerCase().includes(query)) {
+      return true;
+    }
+    
+    // Search in summary
+    if (blog.summary && blog.summary.toLowerCase().includes(query)) {
+      return true;
+    }
+    
+    // Search in content
+    if (blog.content && blog.content.toLowerCase().includes(query)) {
+      return true;
+    }
+    
+    // Search in tags
+    if (blog.categories_tags && Array.isArray(blog.categories_tags)) {
+      return blog.categories_tags.some(tag => 
+        tag.toLowerCase().includes(query)
+      );
+    }
+    
+    return false;
+  });
+
+  console.log("✅ Content search found:", matchingBlogs.length, "blogs");
+
+  // Search for blogs by author name
+  const allAuthors = await getAllAuthors();
+  const matchingAuthors = allAuthors.filter(author => 
+    author.title.toLowerCase().includes(trimmedQuery.toLowerCase())
+  );
+
+  console.log("👤 Found", matchingAuthors.length, "matching authors");
+
+  const blogsByAuthors = [];
+  for (const author of matchingAuthors) {
+    const authorBlogs = await getBlogsByAuthor(author.uid);
+    blogsByAuthors.push(...authorBlogs);
+  }
+
+  console.log("📝 Author blogs found:", blogsByAuthors.length);
+
+  // Combine and deduplicate results
+  const allResults = [...matchingBlogs, ...blogsByAuthors];
+  const uniqueResults = allResults.filter((blog, index, self) => 
+    index === self.findIndex(b => b.uid === blog.uid)
+  );
+
+  console.log("🎯 Final unique results:", uniqueResults.length);
+
+  // Enrich with author data
+  const enrichedResults = [];
+  for (const blog of uniqueResults) {
+    if (blog.author && Array.isArray(blog.author) && blog.author.length > 0) {
+      const authorUid = (blog.author[0] as any).uid || blog.author[0];
+      if (typeof authorUid === 'string') {
+        const authorData = await getAuthorByUid(authorUid);
+        if (authorData) {
+          blog.author = [authorData];
         }
       }
-      enrichedEntries.push(entry);
     }
-
-    // Also search for blogs by author name
-    const allAuthors = await getAllAuthors();
-    const matchingAuthors = allAuthors.filter(author => 
-      author.title.toLowerCase().includes(trimmedQuery.toLowerCase())
-    );
-
-    // Get blogs by matching authors
-    const blogsByAuthors = [];
-    for (const author of matchingAuthors) {
-      const authorBlogs = await getBlogsByAuthor(author.uid);
-      blogsByAuthors.push(...authorBlogs);
-    }
-
-    // Combine and deduplicate results
-    const allResults = [...enrichedEntries, ...blogsByAuthors];
-    const uniqueResults = allResults.filter((blog, index, self) => 
-      index === self.findIndex(b => b.uid === blog.uid)
-    );
-
-    // Sort by published date
-    uniqueResults.sort((a, b) => {
-      const dateA = new Date(a.published_date || 0).getTime();
-      const dateB = new Date(b.published_date || 0).getTime();
-      return dateB - dateA;
-    });
-
-    if (process.env.NEXT_PUBLIC_CONTENTSTACK_PREVIEW === 'true') {
-      uniqueResults.forEach((entry: Blog) => {
-        contentstack.Utils.addEditableTags(entry, 'blog', true);
-      });
-    }
-
-    return uniqueResults;
+    enrichedResults.push(blog);
   }
-  
-  return [];
+
+  // Sort by published date
+  enrichedResults.sort((a, b) => {
+    const dateA = new Date(a.published_date || 0).getTime();
+    const dateB = new Date(b.published_date || 0).getTime();
+    return dateB - dateA;
+  });
+
+  if (process.env.NEXT_PUBLIC_CONTENTSTACK_PREVIEW === 'true') {
+    enrichedResults.forEach((entry: Blog) => {
+      contentstack.Utils.addEditableTags(entry, 'blog', true);
+    });
+  }
+
+  return enrichedResults;
 }

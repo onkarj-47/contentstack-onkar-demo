@@ -100,7 +100,7 @@ async function sendNewBlogEmail(subscriberEmail: string, blog: any) {
   }
 }
 
-function generateEmailTemplate(blog: any, blogUrl: string): string {
+function generateEmailTemplate(blog: any, blogUrl: string, subscriberEmail: string): string {
   return `
     <!DOCTYPE html>
     <html>
