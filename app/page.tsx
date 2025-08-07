@@ -3,11 +3,34 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getAllBlogs, getAllAuthors, initLivePreview } from "@/lib/contentstack";
+import { getAllBlogs, getAllAuthors, initLivePreview, initPersonalization } from "@/lib/contentstack";
+import { getPersonalizationAPI } from "@/lib/personalization-api";
 import { useEffect, useState } from "react";
 import { Blog, Author } from "@/lib/types";
 import ContentstackLivePreview from "@contentstack/live-preview-utils";
 import SearchBar from "@/app/components/SearchBar";
+import PersonalizationBanner from "@/app/components/PersonalizationBanner";
+import InterestManager from "@/app/components/InterestManager";
+import { 
+  setPersonalizationEmail, 
+  dismissPersonalizationBanner, 
+  shouldShowPersonalizationBanner,
+  getPersonalizationStatus 
+} from "@/lib/personalization";
+import { 
+  personalizeContentByInterests, 
+  hasUserInterests, 
+  getUserTopInterests,
+  getInterestStats,
+  getInterestBasedRecommendations 
+} from "@/lib/user-interests";
+import {
+  getPersonalizedHomepageConfig,
+  trackExperienceImpression,
+  debugUserExperiences,
+  getUserExperiences
+} from "@/lib/experience-manager";
+import { debugBlogTags, suggestPersonalizationTags } from "@/lib/debug-interests";
 
 /**
  * The `Home` component is the main landing page for the blog.
@@ -18,6 +41,7 @@ export default function Home() {
   const router = useRouter();
   const [featuredBlogs, setFeaturedBlogs] = useState<Blog[]>([]);
   const [recentBlogs, setRecentBlogs] = useState<Blog[]>([]);
+  const [recommendedBlogs, setRecommendedBlogs] = useState<Blog[]>([]);
   const [featuredAuthors, setFeaturedAuthors] = useState<Author[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -26,6 +50,14 @@ export default function Home() {
   const [emailError, setEmailError] = useState("");
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
+  
+  // Personalization state
+  const [showPersonalizationBanner, setShowPersonalizationBanner] = useState(false);
+  const [showInterestManager, setShowInterestManager] = useState(false);
+  
+  // Experience state
+  const [homepageConfig, setHomepageConfig] = useState<any>(null);
+  const [userExperiences, setUserExperiences] = useState<any[]>([]);
 
   // Search handler - redirect to blog page with search
   const handleSearch = (query: string) => {
@@ -88,6 +120,18 @@ export default function Home() {
         setSubscriptionSuccess(true);
         setEmail("");
         
+        // Track newsletter signup with personalization API
+        const personalizationAPI = getPersonalizationAPI();
+        if (personalizationAPI) {
+          console.log('🏠 Homepage: Tracking newsletter signup with personalization API');
+          try {
+            await personalizationAPI.trackNewsletterSignup(email.trim());
+            console.log('🏠 Homepage: Successfully tracked newsletter signup with personalization');
+          } catch (error) {
+            console.error('🏠 Homepage: Error tracking newsletter signup with personalization:', error);
+          }
+        }
+        
         // Show success for a few seconds then hide
         setTimeout(() => {
           setSubscriptionSuccess(false);
@@ -104,6 +148,73 @@ export default function Home() {
     }
   };
 
+  // Personalization handlers
+  const handlePersonalizationEmailSubmit = async (personalizationEmail: string) => {
+    console.log('🏠 Homepage: handlePersonalizationEmailSubmit called with:', personalizationEmail);
+    
+    // Set local storage (existing functionality)
+    setPersonalizationEmail(personalizationEmail);
+    setShowPersonalizationBanner(false);
+    
+    console.log('🏠 Homepage: Personalization enabled for:', personalizationEmail);
+    
+    // Track with Contentstack Personalization API
+    const personalizationAPI = getPersonalizationAPI();
+    if (personalizationAPI) {
+      console.log('🏠 Homepage: Tracking personalization signup with API');
+      try {
+        await personalizationAPI.trackNewsletterSignup(personalizationEmail);
+        console.log('🏠 Homepage: Successfully tracked personalization signup');
+      } catch (error) {
+        console.error('🏠 Homepage: Error tracking personalization signup:', error);
+      }
+    } else {
+      console.log('🏠 Homepage: Personalization API not available for tracking');
+    }
+    
+    console.log('🏠 Homepage: Banner hidden, personalization active');
+  };
+
+  const handlePersonalizationDismiss = () => {
+    console.log('🏠 Homepage: handlePersonalizationDismiss called');
+    dismissPersonalizationBanner();
+    setShowPersonalizationBanner(false);
+    console.log('🏠 Homepage: Banner dismissed permanently');
+  };
+
+  // Load user experiences and homepage configuration
+  const loadUserExperiences = async () => {
+    try {
+      console.log("🏠 Homepage: Loading user experiences...");
+      
+      // Get user's active experiences
+      const experiences = await getUserExperiences();
+      setUserExperiences(experiences);
+      
+      // Get personalized homepage configuration
+      const config = await getPersonalizedHomepageConfig();
+      setHomepageConfig(config);
+      
+      // Debug experiences in development
+      if (process.env.NODE_ENV === 'development') {
+        await debugUserExperiences();
+      }
+      
+      // Track impressions for active experiences
+      experiences.forEach(exp => {
+        if (exp.variantShortUid && exp.experienceShortUid) {
+          trackExperienceImpression(exp.experienceShortUid, exp.variantShortUid);
+        }
+      });
+      
+      console.log("🏠 Homepage: Experiences loaded:", experiences);
+      console.log("🏠 Homepage: Homepage config:", config);
+      
+    } catch (error) {
+      console.error("🏠 Homepage: Error loading experiences:", error);
+    }
+  };
+
   const getContent = async () => {
     try {
       const [blogs, authors] = await Promise.all([
@@ -111,13 +222,90 @@ export default function Home() {
         getAllAuthors()
       ]);
       
-      // Featured posts (first 3)
-      setFeaturedBlogs(blogs.slice(0, 3));
+      // Log current user interest stats
+      const interestStats = getInterestStats();
+      console.log('🏠 Homepage: User interest stats:', interestStats);
       
-      // Recent posts (next 6)
-      setRecentBlogs(blogs.slice(3, 9));
+      // Check if user is in a segmented experience for enhanced personalization
+      const hasExperience = homepageConfig?.experienceVariant;
       
-      // Featured authors (first 4)
+      // Personalize content based on user interests and experience
+      if (hasUserInterests() || hasExperience) {
+        console.log('🏠 Homepage: User has interests or active experience, personalizing content');
+        
+        let personalizedFeatured, personalizedRecent, recommendations;
+        
+        if (hasExperience) {
+          // Enhanced personalization for users in segmented experience
+          console.log('🏠 Homepage: Applying experience-based content filtering');
+          
+          // Prioritize JavaScript/tech content more heavily
+          const jsBlogs = blogs.filter(blog => 
+            blog.categories_tags?.some(tag => 
+              ['javascript', 'react', 'typescript', 'node', 'frontend', 'backend', 'api', 'tutorial'].includes(tag.toLowerCase())
+            )
+          );
+          
+          // Get personalized featured posts with JS bias
+          personalizedFeatured = jsBlogs.length >= 3 
+            ? personalizeContentByInterests(jsBlogs, { maxResults: 3 })
+            : personalizeContentByInterests(blogs, { maxResults: 3 });
+            
+          // Get personalized recent posts (excluding featured ones)
+          const excludeFeaturedUids = personalizedFeatured.map(blog => blog.uid);
+          const remainingBlogs = blogs.filter(blog => !excludeFeaturedUids.includes(blog.uid));
+          const remainingJsBlogs = remainingBlogs.filter(blog => 
+            blog.categories_tags?.some(tag => 
+              ['javascript', 'react', 'typescript', 'node', 'frontend', 'backend', 'api', 'tutorial'].includes(tag.toLowerCase())
+            )
+          );
+          
+          personalizedRecent = remainingJsBlogs.length >= 6
+            ? personalizeContentByInterests(remainingJsBlogs, { maxResults: 6 })
+            : personalizeContentByInterests(remainingBlogs, { maxResults: 6 });
+            
+          console.log('🏠 Homepage: Applied JavaScript-focused filtering for experience');
+        } else {
+          // Standard interest-based personalization
+          personalizedFeatured = personalizeContentByInterests(blogs, {
+            requireMatch: false,
+            maxResults: 3
+          });
+          
+          const excludeFeaturedUids = personalizedFeatured.map(blog => blog.uid);
+          const remainingBlogs = blogs.filter(blog => !excludeFeaturedUids.includes(blog.uid));
+          personalizedRecent = personalizeContentByInterests(remainingBlogs, {
+            requireMatch: false,
+            maxResults: 6
+          });
+        }
+        
+        setFeaturedBlogs(personalizedFeatured);
+        setRecentBlogs(personalizedRecent);
+        
+        // Get recommendations (excluding already shown content)
+        const excludeUids = [...personalizedFeatured.map(b => b.uid), ...personalizedRecent.map(b => b.uid)];
+        recommendations = getInterestBasedRecommendations(blogs, excludeUids, 4);
+        setRecommendedBlogs(recommendations);
+        
+        console.log('🏠 Homepage: Personalized content set');
+        console.log('🏠 Homepage: Featured blogs:', personalizedFeatured.map(b => b.title));
+        console.log('🏠 Homepage: Recommended blogs:', recommendations.map(b => b.title));
+        console.log('🏠 Homepage: User top interests:', getUserTopInterests(5));
+        if (hasExperience) {
+          console.log('🏠 Homepage: Experience variant active:', homepageConfig.experienceVariant);
+        }
+        
+      } else {
+        console.log('🏠 Homepage: No user interests, using default content');
+        
+        // Default content (no personalization)
+        setFeaturedBlogs(blogs.slice(0, 3));
+        setRecentBlogs(blogs.slice(3, 9));
+        setRecommendedBlogs([]); // No recommendations without interests
+      }
+      
+      // Authors are not personalized (yet)
       setFeaturedAuthors(authors.slice(0, 4));
       
     } catch (error) {
@@ -131,6 +319,50 @@ export default function Home() {
     initLivePreview();
     ContentstackLivePreview.onEntryChange(getContent);
     getContent(); // Initial content fetch
+
+    // Initialize personalization
+    console.log("🏠 Homepage: Initializing personalization");
+    const personalizationAPI = initPersonalization();
+    
+    if (personalizationAPI) {
+      console.log("🏠 Homepage: Personalization API initialized, fetching manifest");
+      
+      // Fetch initial manifest to get/generate user UID
+      personalizationAPI.getManifest().then(manifest => {
+        console.log("🏠 Homepage: Initial manifest fetched:", manifest);
+        console.log("🏠 Homepage: User UID after manifest:", personalizationAPI.getUserUid());
+        
+        // Now that we have a user UID, the API is ready for tracking
+        if (manifest.userUid) {
+          console.log("🏠 Homepage: Personalization fully initialized with user UID:", manifest.userUid);
+          
+          // Load user experiences and homepage configuration
+          loadUserExperiences();
+        }
+      }).catch(error => {
+        console.error("🏠 Homepage: Error fetching initial manifest:", error);
+      });
+    } else {
+      console.log("🏠 Homepage: Personalization API not available");
+    }
+
+    // Check if personalization banner should be shown
+    const checkPersonalizationBanner = () => {
+      console.log("🏠 Homepage: Checking if personalization banner should show");
+      const shouldShow = shouldShowPersonalizationBanner();
+      console.log("🏠 Homepage: shouldShowPersonalizationBanner result:", shouldShow);
+      
+      if (shouldShow) {
+        console.log("🏠 Homepage: Setting showPersonalizationBanner to true");
+        setShowPersonalizationBanner(true);
+      } else {
+        console.log("🏠 Homepage: Not showing personalization banner");
+      }
+    };
+
+    console.log("🏠 Homepage: Setting timeout for personalization banner check");
+    // Delay banner check to ensure localStorage is available
+    setTimeout(checkPersonalizationBanner, 1000);
   }, []);
 
   if (loading) {
@@ -171,7 +403,43 @@ export default function Home() {
       {/* Navigation */}
       <nav className="border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex justify-end items-center">
+          <div className="flex justify-end items-center space-x-4">
+            {hasUserInterests() && (
+              <button
+                onClick={() => setShowInterestManager(true)}
+                className="text-sm text-gray-600 hover:text-blue-600 transition-colors flex items-center space-x-1"
+                title="Manage your reading interests"
+              >
+                <span>🎯</span>
+                <span className="hidden sm:inline">Interests</span>
+              </button>
+            )}
+            {/* Show active experiences indicator */}
+            {userExperiences.length > 0 && (
+              <div className="text-sm text-purple-600 flex items-center space-x-1" title="Active personalization experiences">
+                <span>🧪</span>
+                <span className="hidden sm:inline">{userExperiences.length} Active</span>
+              </div>
+            )}
+            {/* Debug button for development */}
+            {process.env.NODE_ENV === 'development' && (
+              <button
+                onClick={async () => {
+                  console.log('🔍 DEBUG: Analyzing blog tags...');
+                  console.log('=' .repeat(50));
+                  await debugBlogTags();
+                  console.log('\n');
+                  suggestPersonalizationTags();
+                  console.log('=' .repeat(50));
+                  console.log('🔍 DEBUG: Analysis complete! Check console above for detailed results.');
+                }}
+                className="text-sm text-gray-500 hover:text-orange-600 transition-colors flex items-center space-x-1"
+                title="Analyze blog tags for personalization"
+              >
+                <span>🔍</span>
+                <span className="hidden sm:inline">Debug Tags</span>
+              </button>
+            )}
             <Link 
               href="/blog" 
               className="bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 transition-colors"
@@ -186,8 +454,19 @@ export default function Home() {
       <section className="bg-gradient-to-r from-blue-50 to-indigo-50 py-16">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-            Insights that <span className="text-blue-600">inspire</span> developers
+            {homepageConfig?.heroMessage || "Insights that inspire developers"}
           </h1>
+          {homepageConfig?.experienceVariant && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 max-w-2xl mx-auto">
+              <div className="flex items-center justify-center space-x-2 text-yellow-800">
+                <span>🧪</span>
+                <span className="font-medium">Personalized Experience Active</span>
+              </div>
+              <p className="text-sm text-yellow-700 mt-1">
+                Content customized based on your JavaScript interests
+              </p>
+            </div>
+          )}
           <p className="text-xl text-gray-600 mb-12 max-w-3xl mx-auto">
             Discover cutting-edge development techniques, learn from industry experts, 
             and stay ahead with the latest in technology and design.
@@ -280,6 +559,70 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {/* Recommended for You - Only show if user has interests */}
+      {hasUserInterests() && recommendedBlogs.length > 0 && (
+        <section className="py-16 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">Recommended for You</h2>
+              <p className="text-gray-600 max-w-2xl mx-auto">
+                Based on your reading interests: {getUserTopInterests(3).map(interest => 
+                  <span key={interest} className="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium mr-2 mb-2 capitalize">
+                    {interest}
+                  </span>
+                )}
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {recommendedBlogs.map((blog) => (
+                <article key={blog.uid} className="group bg-white rounded-lg shadow-sm hover:shadow-lg transition-all duration-300">
+                  <Link href={`/blog/${blog.url?.startsWith('/') ? blog.url.slice(1) : blog.url}`}>
+                    {blog.banner_image && (
+                      <div className="relative overflow-hidden rounded-t-lg">
+                        <Image
+                          src={blog.banner_image.url}
+                          alt={blog.title}
+                          width={300}
+                          height={160}
+                          className="w-full h-32 object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                    )}
+                    <div className="p-4 space-y-2">
+                      {blog.categories_tags && blog.categories_tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {blog.categories_tags.slice(0, 2).map((tag, index) => (
+                            <span
+                              key={index}
+                              className="inline-block bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2 text-sm">
+                        {blog.title}
+                      </h3>
+                      <div className="flex items-center space-x-2 text-xs text-gray-500">
+                        {blog.author?.[0] && (
+                          <>
+                            <span>{blog.author[0].title}</span>
+                            <span>•</span>
+                          </>
+                        )}
+                        {blog.reading_time && <span>{blog.reading_time} min read</span>}
+                      </div>
+                    </div>
+                  </Link>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Authors Spotlight */}
       <section className="bg-gray-50 py-16">
@@ -430,6 +773,18 @@ export default function Home() {
           <p>&copy; 2024 Insight Hub. Sharing knowledge, one insight at a time.</p>
         </div>
       </footer>
+
+      {/* Personalization Banner */}
+      {showPersonalizationBanner && (
+        <PersonalizationBanner
+          onEmailSubmit={handlePersonalizationEmailSubmit}
+          onDismiss={handlePersonalizationDismiss}
+        />
+      )}
+
+      {showInterestManager && (
+        <InterestManager onClose={() => setShowInterestManager(false)} />
+      )}
     </div>
   );
 }

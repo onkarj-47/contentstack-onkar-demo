@@ -5,7 +5,9 @@ import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import DOMPurify from "dompurify";
-import { getBlogBySlug } from "@/lib/contentstack";
+import { getBlogBySlug, initPersonalization } from "@/lib/contentstack";
+import { getPersonalizationAPI } from "@/lib/personalization-api";
+import { trackInterestFromBlog } from "@/lib/user-interests";
 import { Blog } from "@/lib/types";
 
 /**
@@ -27,6 +29,35 @@ export default function BlogPostPage() {
         const blogPost = await getBlogBySlug(slug);
         if (blogPost) {
           setBlog(blogPost);
+          
+          // Get existing personalization API instance (don't create new one)
+          let personalizationAPI = getPersonalizationAPI();
+          
+          // If no instance exists, initialize it
+          if (!personalizationAPI) {
+            console.log('📖 BlogPost: No existing personalization instance, initializing...');
+            personalizationAPI = initPersonalization();
+          }
+          
+                                // Track user interests from blog tags
+                      const tags = blogPost.categories_tags || [];
+                      if (tags.length > 0) {
+                        console.log('📖 BlogPost: Tracking user interests from tags:', tags);
+                        trackInterestFromBlog(tags, blogPost.uid);
+                      }
+
+                      // Track blog view with personalization API
+                      if (personalizationAPI) {
+                        console.log('📖 BlogPost: Tracking blog view with personalization API');
+                        try {
+                          await personalizationAPI.trackBlogView(blogPost.uid, tags);
+                          console.log('📖 BlogPost: Successfully tracked blog view');
+                        } catch (error) {
+                          console.error('📖 BlogPost: Error tracking blog view:', error);
+                        }
+                      } else {
+                        console.log('📖 BlogPost: Personalization API not available for tracking');
+                      }
         } else {
           setError("Blog post not found");
         }

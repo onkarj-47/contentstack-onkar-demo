@@ -7,6 +7,9 @@ import ContentstackLivePreview, { IStackSdk } from "@contentstack/live-preview-u
 // Importing the type definitions 
 import { Page, Blog, Author } from "./types";
 
+// Importing personalization API
+import { initPersonalizationAPI, getPersonalizationAPI, PersonalizationConfig } from "./personalization-api";
+
 // helper functions from private package to retrieve Contentstack endpoints in a convienient way
 import { getContentstackEndpoints, getRegionForString } from "@timbenniks/contentstack-endpoints";
 
@@ -39,6 +42,34 @@ export const stack = contentstack.stack({
     host: endpoints.preview,
   }
 });
+
+// Initialize personalization functionality
+export function initPersonalization() {
+  console.log('🚀 Initializing Contentstack Personalization');
+  
+  const projectUid = process.env.NEXT_PUBLIC_CONTENTSTACK_PERSONALIZE_PROJECT_UID;
+  const region = process.env.NEXT_PUBLIC_CONTENTSTACK_REGION || "EU";
+  
+  if (!projectUid) {
+    console.warn('⚠️ Personalization Project UID not found in environment variables');
+    return null;
+  }
+
+  const config: PersonalizationConfig = {
+    baseUrl: '', // Will use region-based URL
+    projectUid,
+    region: region.toUpperCase() as 'US' | 'EU' | 'AU',
+  };
+
+  try {
+    const personalizationAPI = initPersonalizationAPI(config);
+    console.log('✅ Personalization initialized successfully');
+    return personalizationAPI;
+  } catch (error) {
+    console.error('❌ Failed to initialize personalization:', error);
+    return null;
+  }
+}
 
 // Initialize live preview functionality
 export function initLivePreview() {
