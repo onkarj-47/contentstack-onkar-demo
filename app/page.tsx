@@ -11,6 +11,9 @@ import ContentstackLivePreview from "@contentstack/live-preview-utils";
 import SearchBar from "@/app/components/SearchBar";
 import PersonalizationBanner from "@/app/components/PersonalizationBanner";
 import InterestManager from "@/app/components/InterestManager";
+import DynamicHero from "@/components/DynamicHero";
+import PersonalizedSections from "@/components/PersonalizedSections";
+import SmartRecommendations from "@/components/SmartRecommendations";
 import { 
   setPersonalizationEmail, 
   dismissPersonalizationBanner, 
@@ -285,12 +288,16 @@ export default function Home() {
         
         // Get recommendations (excluding already shown content)
         const excludeUids = [...personalizedFeatured.map(b => b.uid), ...personalizedRecent.map(b => b.uid)];
-        recommendations = getInterestBasedRecommendations(blogs, excludeUids, 4);
+        recommendations = getInterestBasedRecommendations([], {
+          maxResults: 4,
+          excludeUids,
+          requireMatch: false
+        });
         setRecommendedBlogs(recommendations);
         
         console.log('🏠 Homepage: Personalized content set');
         console.log('🏠 Homepage: Featured blogs:', personalizedFeatured.map(b => b.title));
-        console.log('🏠 Homepage: Recommended blogs:', recommendations.map(b => b.title));
+        console.log('🏠 Homepage: Recommended blogs count:', recommendations.length);
         console.log('🏠 Homepage: User top interests:', getUserTopInterests(5));
         if (hasExperience) {
           console.log('🏠 Homepage: Experience variant active:', homepageConfig.experienceVariant);
@@ -450,51 +457,22 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="bg-gradient-to-r from-blue-50 to-indigo-50 py-16">
-        <div className="max-w-6xl mx-auto px-4 text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-            {homepageConfig?.heroMessage || "Insights that inspire developers"}
-          </h1>
-          {homepageConfig?.experienceVariant && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 max-w-2xl mx-auto">
-              <div className="flex items-center justify-center space-x-2 text-yellow-800">
-                <span>🧪</span>
-                <span className="font-medium">Personalized Experience Active</span>
-              </div>
-              <p className="text-sm text-yellow-700 mt-1">
-                Content customized based on your JavaScript interests
-              </p>
-            </div>
-          )}
-          <p className="text-xl text-gray-600 mb-12 max-w-3xl mx-auto">
-            Discover cutting-edge development techniques, learn from industry experts, 
-            and stay ahead with the latest in technology and design.
-          </p>
-          
-          {/* Search Bar */}
-          <div className="mb-12 max-w-2xl mx-auto">
-            <SearchBar 
-              onSearch={handleSearch}
-              placeholder="Search for stories, topics, or authors..."
-              className="w-full"
-            />
-          </div>
+      {/* Dynamic Hero Section */}
+      <DynamicHero onSearch={handleSearch} />
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link 
-              href="/blog" 
-              className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-            >
-              Start Reading
-            </Link>
-            <Link 
-              href="#featured" 
-              className="border border-gray-300 text-gray-700 px-8 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
-            >
-              Explore Topics
-            </Link>
-          </div>
+      {/* Personalized Content Sections */}
+      <PersonalizedSections />
+
+      {/* Recommended for You Section */}
+      <section className="py-16 bg-gray-50">
+        <div className="max-w-6xl mx-auto px-4">
+          <SmartRecommendations 
+            placement="inline"
+            maxRecommendations={6}
+            showInterests={true}
+            title="📚 Recommended for You"
+            className="max-w-4xl mx-auto"
+          />
         </div>
       </section>
 

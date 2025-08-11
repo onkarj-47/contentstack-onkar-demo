@@ -7,6 +7,7 @@ import Link from "next/link";
 import { getAllBlogs, searchBlogs } from "@/lib/contentstack";
 import { Blog } from "@/lib/types";
 import SearchBar from "@/app/components/SearchBar";
+import SmartRecommendations from "@/components/SmartRecommendations";
 
 /**
  * Blog Listing Page Content - Contains the search params logic

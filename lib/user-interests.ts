@@ -229,30 +229,85 @@ export function personalizeContentByInterests<T extends { categories_tags?: stri
 /**
  * Get interest-based recommendations
  */
-export function getInterestBasedRecommendations<T extends { categories_tags?: string[] }>(
-  allContent: T[],
-  excludeUids: string[] = [],
-  maxResults: number = 6
-): T[] {
-  const userInterests = getUserTopInterests();
+export function getInterestBasedRecommendations(
+  interests: string[] = [],
+  options: {
+    maxResults?: number;
+    requireMatch?: boolean;
+    excludeUids?: string[];
+  } = {}
+) {
+  const { maxResults = 6, requireMatch = false, excludeUids = [] } = options;
   
-  if (userInterests.length === 0) {
-    return allContent
-      .filter(item => !excludeUids.includes((item as any).uid))
-      .slice(0, maxResults);
+  // Note: This function now returns a simplified implementation
+  // In PersonalizedSections, we'll use getAllBlogs() directly
+  
+  // Use provided interests or fall back to user interests
+  const targetInterests = interests.length > 0 ? interests : getUserTopInterests();
+  
+  if (targetInterests.length === 0) {
+    return [];
   }
 
-  // Filter out excluded content
-  const availableContent = allContent.filter(item => 
-    !excludeUids.includes((item as any).uid)
-  );
+  // Return empty array - PersonalizedSections will handle the async blog loading
+  return [];
+}
 
-  // Get personalized recommendations
-  return personalizeContentByInterests(availableContent, {
-    requireMatch: true,
-    minScore: 1,
-    maxResults
-  });
+/**
+ * Track user interactions for machine learning
+ */
+export function trackInteraction(
+  type: 'recommendation_click' | 'interest_click' | 'search' | 'dismiss',
+  data: Record<string, any>
+): void {
+  try {
+    const interactions = JSON.parse(localStorage.getItem('user_interactions') || '[]');
+    
+    const interaction = {
+      type,
+      data,
+      timestamp: Date.now(),
+      sessionId: getSessionId()
+    };
+    
+    interactions.push(interaction);
+    
+    // Keep only last 100 interactions to prevent storage bloat
+    const recentInteractions = interactions.slice(-100);
+    localStorage.setItem('user_interactions', JSON.stringify(recentInteractions));
+    
+    console.log('🎯 Interaction tracked:', type, data);
+  } catch (error) {
+    console.warn('Failed to track interaction:', error);
+  }
+}
+
+/**
+ * Get user interaction history
+ */
+export function getUserInteractions(): Array<{
+  type: string;
+  data: Record<string, any>;
+  timestamp: number;
+  sessionId: string;
+}> {
+  try {
+    return JSON.parse(localStorage.getItem('user_interactions') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get session ID for interaction tracking
+ */
+function getSessionId(): string {
+  let sessionId = sessionStorage.getItem('session_id');
+  if (!sessionId) {
+    sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    sessionStorage.setItem('session_id', sessionId);
+  }
+  return sessionId;
 }
 
 /**
