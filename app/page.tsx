@@ -463,18 +463,20 @@ export default function Home() {
       {/* Personalized Content Sections */}
       <PersonalizedSections />
 
-      {/* Recommended for You Section */}
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-6xl mx-auto px-4">
-          <SmartRecommendations 
-            placement="inline"
-            maxRecommendations={6}
-            showInterests={true}
-            title="📚 Recommended for You"
-            className="max-w-4xl mx-auto"
-          />
-        </div>
-      </section>
+      {/* Recommended for You Section - Only show if user has interests */}
+      {hasUserInterests() && (
+        <section className="py-16 bg-gray-50">
+          <div className="max-w-6xl mx-auto px-4">
+            <SmartRecommendations 
+              placement="inline"
+              maxRecommendations={6}
+              showInterests={true}
+              title="📚 Recommended for You"
+              className="max-w-4xl mx-auto"
+            />
+          </div>
+        </section>
+      )}
 
       {/* Featured Stories */}
       <section id="featured" className="py-16">
