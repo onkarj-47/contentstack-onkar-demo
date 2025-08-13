@@ -8,6 +8,7 @@ import DOMPurify from "dompurify";
 import { getBlogBySlug, initPersonalization } from "@/lib/contentstack";
 import { getPersonalizationAPI } from "@/lib/personalization-api";
 import { trackInterestFromBlog } from "@/lib/user-interests";
+import { getHybridPersonalizationManager } from "@/lib/hybrid-personalization";
 import { Blog } from "@/lib/types";
 
 /**
@@ -30,34 +31,44 @@ export default function BlogPostPage() {
         if (blogPost) {
           setBlog(blogPost);
           
-          // Get existing personalization API instance (don't create new one)
-          let personalizationAPI = getPersonalizationAPI();
+          // Track with hybrid personalization system
+          const hybridManager = getHybridPersonalizationManager();
+          const tags = blogPost.categories_tags || [];
           
-          // If no instance exists, initialize it
-          if (!personalizationAPI) {
-            console.log('📖 BlogPost: No existing personalization instance, initializing...');
-            personalizationAPI = initPersonalization();
-          }
-          
-                                // Track user interests from blog tags
-                      const tags = blogPost.categories_tags || [];
-                      if (tags.length > 0) {
-                        console.log('📖 BlogPost: Tracking user interests from tags:', tags);
-                        trackInterestFromBlog(tags, blogPost.uid);
-                      }
+          // Track blog view with enhanced hybrid tracking
+          try {
+            await hybridManager.trackBlogView({
+              uid: blogPost.uid,
+              title: blogPost.title,
+              tags: tags,
+              author: blogPost.author?.[0]?.title,
+              readTime: 0 // Will be updated with actual reading time
+            });
+            console.log('📖 BlogPost: Successfully tracked blog view with hybrid system');
+          } catch (error) {
+            console.error('📖 BlogPost: Error tracking blog view with hybrid system:', error);
+            
+            // Fallback to individual systems
+            if (tags.length > 0) {
+              console.log('📖 BlogPost: Fallback - tracking user interests from tags:', tags);
+              trackInterestFromBlog(tags, blogPost.uid);
+            }
 
-                      // Track blog view with personalization API
-                      if (personalizationAPI) {
-                        console.log('📖 BlogPost: Tracking blog view with personalization API');
-                        try {
-                          await personalizationAPI.trackBlogView(blogPost.uid, tags);
-                          console.log('📖 BlogPost: Successfully tracked blog view');
-                        } catch (error) {
-                          console.error('📖 BlogPost: Error tracking blog view:', error);
-                        }
-                      } else {
-                        console.log('📖 BlogPost: Personalization API not available for tracking');
-                      }
+            // Fallback to Contentstack only
+            let personalizationAPI = getPersonalizationAPI();
+            if (!personalizationAPI) {
+              personalizationAPI = initPersonalization();
+            }
+            
+            if (personalizationAPI) {
+              try {
+                await personalizationAPI.trackBlogView(blogPost.uid, tags);
+                console.log('📖 BlogPost: Fallback tracking successful');
+              } catch (fallbackError) {
+                console.error('📖 BlogPost: Fallback tracking failed:', fallbackError);
+              }
+            }
+          }
         } else {
           setError("Blog post not found");
         }

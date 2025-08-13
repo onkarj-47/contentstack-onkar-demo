@@ -5,6 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getAllBlogs, getAllAuthors, initLivePreview, initPersonalization } from "@/lib/contentstack";
 import { getPersonalizationAPI } from "@/lib/personalization-api";
+import { initLytics } from "@/lib/lytics-integration";
+import { initPathfora } from "@/lib/pathfora-integration";
+import { initPathforaFallback } from "@/lib/pathfora-fallback";
+import { initHybridPersonalization, getHybridPersonalizationManager } from "@/lib/hybrid-personalization";
+import { logSystemStatus } from "@/lib/system-status";
 import { useEffect, useState } from "react";
 import { Blog, Author } from "@/lib/types";
 import ContentstackLivePreview from "@contentstack/live-preview-utils";
@@ -123,16 +128,13 @@ export default function Home() {
         setSubscriptionSuccess(true);
         setEmail("");
         
-        // Track newsletter signup with personalization API
-        const personalizationAPI = getPersonalizationAPI();
-        if (personalizationAPI) {
-          console.log('🏠 Homepage: Tracking newsletter signup with personalization API');
-          try {
-            await personalizationAPI.trackNewsletterSignup(email.trim());
-            console.log('🏠 Homepage: Successfully tracked newsletter signup with personalization');
-          } catch (error) {
-            console.error('🏠 Homepage: Error tracking newsletter signup with personalization:', error);
-          }
+        // Track newsletter signup with hybrid system
+        const hybridManager = getHybridPersonalizationManager();
+        try {
+          await hybridManager.trackNewsletterSignup(email.trim(), 'homepage_form');
+          console.log('🏠 Homepage: Successfully tracked newsletter signup with hybrid system');
+        } catch (error) {
+          console.error('🏠 Homepage: Error tracking newsletter signup with hybrid system:', error);
         }
         
         // Show success for a few seconds then hide
@@ -327,12 +329,29 @@ export default function Home() {
     ContentstackLivePreview.onEntryChange(getContent);
     getContent(); // Initial content fetch
 
-    // Initialize personalization
-    console.log("🏠 Homepage: Initializing personalization");
+    // Initialize hybrid personalization system
+    console.log("🏠 Homepage: Initializing hybrid personalization system");
+    
+    // Log system status for debugging (after initialization)
+    setTimeout(() => {
+      logSystemStatus();
+    }, 3000);
+    
+    // Initialize Contentstack Personalize
     const personalizationAPI = initPersonalization();
     
+    // Initialize Lytics
+    const lyticsAPI = initLytics();
+    
+    // Initialize Pathfora (depends on Lytics) - Using fallback for demo reliability
+    // const pathforaAPI = initPathfora(lyticsAPI);
+    const pathforaAPI = null; // Force use of fallback widgets - more reliable for demos
+    
+    // Initialize hybrid manager
+    const hybridManager = initHybridPersonalization();
+    
     if (personalizationAPI) {
-      console.log("🏠 Homepage: Personalization API initialized, fetching manifest");
+      console.log("🏠 Homepage: Contentstack Personalization API initialized, fetching manifest");
       
       // Fetch initial manifest to get/generate user UID
       personalizationAPI.getManifest().then(manifest => {
@@ -345,12 +364,31 @@ export default function Home() {
           
           // Load user experiences and homepage configuration
           loadUserExperiences();
+          
+          // Sync user data after Contentstack is ready
+          setTimeout(() => {
+            hybridManager.syncUserData();
+          }, 1000);
         }
       }).catch(error => {
         console.error("🏠 Homepage: Error fetching initial manifest:", error);
       });
     } else {
-      console.log("🏠 Homepage: Personalization API not available");
+      console.log("🏠 Homepage: Contentstack Personalization API not available");
+    }
+
+    if (lyticsAPI) {
+      console.log("🏠 Homepage: Lytics API initialized");
+    } else {
+      console.log("🏠 Homepage: Lytics API not available");
+    }
+
+    if (pathforaAPI) {
+      console.log("🏠 Homepage: Pathfora API initialized");
+    } else {
+      console.log("🏠 Homepage: Pathfora API not available - using fallback widgets");
+      // Initialize fallback widgets immediately since we're not using main Pathfora
+      initPathforaFallback();
     }
 
     // Check if personalization banner should be shown
