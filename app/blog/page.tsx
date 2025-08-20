@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import React, { useEffect, useState, Suspense } from "react";
+// Removed useSearchParams to avoid Next.js 15 enumeration issues
 import Image from "next/image";
 import Link from "next/link";
 import { getAllBlogs, searchBlogs } from "@/lib/contentstack";
@@ -12,7 +12,6 @@ import SearchBar from "@/app/components/SearchBar";
  * Blog Listing Page Content - Contains the search params logic
  */
 function BlogPageContent() {
-  const searchParams = useSearchParams();
   const [blogs, setBlogs] = useState<Blog[]>([]);
   const [allBlogs, setAllBlogs] = useState<Blog[]>([]); // Store all blogs for resetting search
   const [loading, setLoading] = useState(true);
@@ -27,12 +26,15 @@ function BlogPageContent() {
         setBlogs(blogPosts);
         setAllBlogs(blogPosts); // Store all blogs for search reset
         
-        // Check for search parameter from URL
-        const searchParam = searchParams.get('search');
-        if (searchParam) {
-          setSearchQuery(searchParam);
-          // Don't automatically search, just populate the search field
-          // User will need to click search button to see results
+        // Check for search parameter from URL - using window.location to avoid Next.js 15 issues
+        if (typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search);
+          const searchParam = urlParams.get('search');
+          if (searchParam) {
+            setSearchQuery(searchParam);
+            // Don't automatically search, just populate the search field
+            // User will need to click search button to see results
+          }
         }
       } catch (error) {
         console.error("Error fetching blogs:", error);
@@ -42,7 +44,7 @@ function BlogPageContent() {
     };
 
     fetchBlogs();
-  }, [searchParams]);
+  }, []); // Remove searchParams dependency to avoid enumeration
 
   // Search handler function
   const handleSearch = async (query: string) => {

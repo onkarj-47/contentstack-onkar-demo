@@ -309,15 +309,98 @@ export class LyticsIntegration {
    */
   setUserAttributes(attributes: Record<string, any>): void {
     try {
-      if (window.jstag && window.jstag.identify) {
-        window.jstag.identify(attributes);
-        console.log('🎯 Lytics: User attributes set via JStag:', attributes);
+      if (window.jstag) {
+        // Set user attributes using identify
+        if (window.jstag.identify) {
+          window.jstag.identify(attributes);
+          console.log('🎯 Lytics: User attributes set via identify:', attributes);
+        }
+        
+        // Also send as a custom event to ensure Lytics processes the data
+        if (window.jstag.send) {
+          window.jstag.send('user_attributes_updated', {
+            ...attributes,
+            timestamp: new Date().toISOString(),
+            source: 'hybrid_personalization'
+          });
+          console.log('🎯 Lytics: User attributes sent as event for processing');
+        }
       } else {
         console.warn('🎯 Lytics: JStag not available for setting user attributes');
       }
     } catch (error) {
       console.warn('🎯 Lytics: Failed to set user attributes:', error);
     }
+  }
+
+  /**
+   * Send user interests to Lytics for segment creation
+   */
+  sendUserInterests(interests: string[], additionalData: Record<string, any> = {}): void {
+    if (!interests || interests.length === 0) {
+      console.warn('🎯 Lytics: No interests to send');
+      return;
+    }
+
+    try {
+      const interestData = {
+        user_interests: interests,
+        primary_interest: interests[0],
+        total_interests: interests.length,
+        interest_categories: this.categorizeInterests(interests),
+        ...additionalData,
+        timestamp: new Date().toISOString(),
+        source: 'interest_tracking'
+      };
+
+      if (window.jstag) {
+        // Send as user attributes
+        if (window.jstag.identify) {
+          window.jstag.identify(interestData);
+        }
+        
+        // Send as custom event for immediate processing
+        if (window.jstag.send) {
+          window.jstag.send('user_interests_updated', interestData);
+        }
+        
+        console.log('🎯 Lytics: User interests sent successfully:', interestData);
+      } else {
+        console.warn('🎯 Lytics: JStag not available for sending interests');
+      }
+    } catch (error) {
+      console.error('🎯 Lytics: Failed to send user interests:', error);
+    }
+  }
+
+  /**
+   * Categorize interests for better segmentation
+   */
+  private categorizeInterests(interests: string[]): Record<string, string[]> {
+    const categories = {
+      database: ['database', 'postgresdb', 'mongodb', 'redis', 'sql'],
+      frontend: ['frontend', 'react', 'vue', 'angular', 'javascript', 'typescript'],
+      backend: ['backend', 'node', 'python', 'java', 'api'],
+      cloud: ['aws', 'azure', 'gcp', 'docker', 'kubernetes'],
+      tools: ['prisma', 'firebase', 'git'],
+      learning: ['tutorials & learning', 'documentation', 'guides']
+    };
+
+    const result: Record<string, string[]> = {};
+    
+    Object.entries(categories).forEach(([category, keywords]) => {
+      const matchingInterests = interests.filter(interest => 
+        keywords.some(keyword => 
+          interest.toLowerCase().includes(keyword.toLowerCase())
+        )
+      );
+      
+      if (matchingInterests.length > 0) {
+        result[category] = matchingInterests;
+      }
+    });
+
+    return result;
   }
 
   /**

@@ -136,14 +136,28 @@ export class HybridPersonalizationManager {
         });
       }
 
-      // Sync data to Lytics
+      // Sync data to Lytics - ALWAYS send interests to build segments
       if (this.lyticsAPI && userInterests.length > 0) {
+        // Send comprehensive user data to Lytics
+        this.lyticsAPI.sendUserInterests(userInterests, {
+          contentstack_uid: contentstackUID,
+          engagement_score: engagementScore,
+          total_blog_views: this.getTotalBlogViews(),
+          user_type: this.getUserType(userInterests, engagementScore),
+          skill_level: this.getSkillLevel(engagementScore),
+          content_preferences: this.getContentPreferences(userInterests)
+        });
+
+        // Also set as attributes for immediate availability
         this.lyticsAPI.setUserAttributes({
           contentstack_interests: userInterests,
           primary_interest: userInterests[0],
           contentstack_uid: contentstackUID,
-          engagement_score: engagementScore
+          engagement_score: engagementScore,
+          lytics_sync_timestamp: new Date().toISOString()
         });
+
+        console.log('🔄 Hybrid: Comprehensive user data sent to Lytics for segment creation');
       }
 
       const hybridData: HybridUserData = {
@@ -308,6 +322,57 @@ export class HybridPersonalizationManager {
         console.error(`❌ Hybrid: Lytics custom event '${eventName}' failed:`, error);
       }
     }
+  }
+
+  /**
+   * Get total blog views from local storage
+   */
+  private getTotalBlogViews(): number {
+    try {
+      const profile = JSON.parse(localStorage.getItem('user_interest_profile') || '{}');
+      return profile.totalBlogViews || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Determine user type based on interests and engagement
+   */
+  private getUserType(interests: string[], engagementScore: number): string {
+    const hasDatabase = interests.some(i => ['database', 'postgresdb', 'mongodb', 'redis', 'sql'].includes(i.toLowerCase()));
+    const hasFrontend = interests.some(i => ['frontend', 'react', 'vue', 'angular', 'javascript'].includes(i.toLowerCase()));
+    const hasBackend = interests.some(i => ['backend', 'node', 'python', 'java', 'api'].includes(i.toLowerCase()));
+    
+    if (hasDatabase && hasFrontend && hasBackend) return 'fullstack_developer';
+    if (hasDatabase || hasBackend) return 'backend_developer';
+    if (hasFrontend) return 'frontend_developer';
+    if (interests.some(i => i.toLowerCase().includes('learning'))) return 'learning_focused';
+    
+    return 'general_developer';
+  }
+
+  /**
+   * Determine skill level based on engagement score
+   */
+  private getSkillLevel(engagementScore: number): string {
+    if (engagementScore >= 80) return 'advanced';
+    if (engagementScore >= 60) return 'intermediate';
+    return 'beginner';
+  }
+
+  /**
+   * Get content preferences based on interests
+   */
+  private getContentPreferences(interests: string[]): string[] {
+    const preferences = [];
+    
+    if (interests.some(i => i.toLowerCase().includes('tutorial'))) preferences.push('tutorials');
+    if (interests.some(i => ['database', 'sql'].includes(i.toLowerCase()))) preferences.push('database_content');
+    if (interests.some(i => ['frontend', 'react'].includes(i.toLowerCase()))) preferences.push('frontend_content');
+    if (interests.some(i => ['backend', 'api'].includes(i.toLowerCase()))) preferences.push('backend_content');
+    
+    return preferences.length > 0 ? preferences : ['general_tech'];
   }
 
   /**

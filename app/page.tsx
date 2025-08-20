@@ -366,9 +366,25 @@ export default function Home() {
           loadUserExperiences();
           
           // Sync user data after Contentstack is ready
-          setTimeout(() => {
-            hybridManager.syncUserData();
-          }, 1000);
+          setTimeout(async () => {
+            const syncResult = await hybridManager.syncUserData();
+            if (syncResult) {
+              console.log('🎯 Homepage: Initial sync completed, user data:', syncResult);
+              
+              // Force an additional sync to Lytics with current interests
+              const { getLyticsInstance } = await import('@/lib/lytics-integration');
+              const lyticsAPI = getLyticsInstance();
+              if (lyticsAPI && syncResult.userInterests.length > 0) {
+                lyticsAPI.sendUserInterests(syncResult.userInterests, {
+                  contentstack_uid: syncResult.contentstackUID,
+                  engagement_score: syncResult.engagementScore,
+                  force_sync: true,
+                  sync_source: 'homepage_initialization'
+                });
+                console.log('🎯 Homepage: Force-synced interests to Lytics for segment creation');
+              }
+            }
+          }, 2000); // Give Lytics time to fully initialize
         }
       }).catch(error => {
         console.error("🏠 Homepage: Error fetching initial manifest:", error);
