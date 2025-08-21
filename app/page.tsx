@@ -343,9 +343,9 @@ export default function Home() {
     // Initialize Lytics
     const lyticsAPI = initLytics();
     
-    // Initialize Pathfora (depends on Lytics) - Using fallback for demo reliability
-    // const pathforaAPI = initPathfora(lyticsAPI);
-    const pathforaAPI = null; // Force use of fallback widgets - more reliable for demos
+    // Initialize Pathfora (depends on Lytics)
+    const pathforaAPI = initPathfora(lyticsAPI);
+    // const pathforaAPI = null; // Fallback disabled - using real Pathfora now
     
     // Initialize hybrid manager
     const hybridManager = initHybridPersonalization();
@@ -403,7 +403,7 @@ export default function Home() {
       console.log("🏠 Homepage: Pathfora API initialized");
     } else {
       console.log("🏠 Homepage: Pathfora API not available - using fallback widgets");
-      // Initialize fallback widgets immediately since we're not using main Pathfora
+      // Initialize fallback widgets as backup
       initPathforaFallback();
     }
 

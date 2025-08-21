@@ -169,14 +169,13 @@ export class PathforaIntegration {
         }
       },
       displayConditions: {
+        showOnExitIntent: false,
+        showDelay: 5000, // Show after 5 seconds
         impressions: {
-          session: 1, // Max 1 per session
-          lifetime: 3  // Max 3 total
-        },
-        pageViews: 2, // Show after 2 page views
-        hideAfter: {
-          days: 7 // Don't show again for 7 days if dismissed
+          total: 3,
+          days: 7
         }
+        // Removed pageViews requirement for easier testing
       },
       colors: {
         background: '#4F46E5',
@@ -230,15 +229,13 @@ export class PathforaIntegration {
         }
       },
       displayConditions: {
+        showOnExitIntent: true,
+        showDelay: 10000, // Wait 10 seconds (reduced for testing)
         impressions: {
-          session: 1,
-          lifetime: 2
-        },
-        pageViews: 4, // Show after 4 page views
-        timeDelay: 30000, // Wait 30 seconds
-        hideAfter: {
-          days: 30 // Don't show again for 30 days if dismissed
+          total: 2,
+          days: 30
         }
+        // Removed pageViews requirement for easier testing  
       },
       colors: {
         background: '#059669',
@@ -296,14 +293,11 @@ export class PathforaIntegration {
         }
       },
       displayConditions: {
+        showOnExitIntent: true,
+        showDelay: 30000, // Been on page for 30+ seconds
         impressions: {
-          session: 1,
-          lifetime: 1
-        },
-        exitIntent: true,
-        timeOnPage: 30000, // Been on page for 30+ seconds
-        hideAfter: {
-          days: 14 // Don't show again for 14 days
+          total: 1,
+          days: 14
         }
       },
       colors: {
@@ -365,9 +359,8 @@ export class PathforaIntegration {
         }
       },
       displayConditions: {
-        hideAfter: {
-          seconds: 5 // Auto-hide after 5 seconds
-        }
+        showDelay: 0,
+        hideAfter: 5000 // Auto-hide after 5 seconds (in milliseconds)
       }
     });
 
@@ -391,9 +384,8 @@ export class PathforaIntegration {
         }
       },
       displayConditions: {
-        hideAfter: {
-          seconds: 5
-        }
+        showDelay: 0,
+        hideAfter: 5000 // Auto-hide after 5 seconds (in milliseconds)
       }
     });
 
